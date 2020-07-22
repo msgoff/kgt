@@ -7,6 +7,33 @@ Well imagine if you did! This would be the tool for you.
  Input:  Various BNF-like syntaxes  
  Output: Various BNF-like syntaxes, AST dumps, and Railroad Syntax Diagrams
 
+Compilation phases:
+
+![phases.svg](doc/tutorial/phases.svg)
+
+- Bold indicates the input BNF dialects with the most features
+- ✨ indicates presentational formats (these are the good ones!)
+- 🧪 indicates debugging formats.  
+  You don't want these unless you're looking at kgt's internals.
+- Other formats provide various subsets of features
+
+Gallery:
+
+- C89 grammar [WSN source](/examples/c_syntax.wsn)  
+  → Presentational BNF:
+  [EBNF](https://katef.github.io/kgt/doc/gallery/c89-ebnf.html)  
+  → Railroad diagrams:
+  [SVG](https://katef.github.io/kgt/doc/gallery/c89-rrd.html),
+  [ASCII](https://katef.github.io/kgt/doc/gallery/c89-ascii.txt),
+  [UTF8](https://katef.github.io/kgt/doc/gallery/c89-utf8.txt)   ✨ Look at these ones! ✨
+- C99 grammar [EBNF source](/examples/c99-grammar.iso-ebnf)  
+  → Presentational BNF:
+  [EBNF](https://katef.github.io/kgt/doc/gallery/c99-ebnf.html)  
+  → Railroad diagrams:
+  [SVG](https://katef.github.io/kgt/doc/gallery/c99-rrd.html),
+  [ASCII](https://katef.github.io/kgt/doc/gallery/c99-ascii.txt),
+  [UTF8](https://katef.github.io/kgt/doc/gallery/c99-utf8.txt)
+
 Getting started:
 
 See the [/examples](examples/) directory for grammars in various

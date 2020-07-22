@@ -84,6 +84,7 @@
 	struct act_state {
 		enum LX_TOKEN lex_tok;
 		enum LX_TOKEN lex_tok_save;
+		int invisible;
 	};
 
 	struct lex_state {
@@ -162,7 +163,7 @@
 			p += z;
 		}
 
-		q = t->p;
+		q = (void *) t->p;
 
 		for (;;) {
 			unsigned long n;
@@ -463,7 +464,7 @@
 	@};
 
 	BINRANGE: () -> (m :char, n :char) = @{
-		if (-1 == range(lex_state->buf.a, &@m, &@n,  2)) {
+		if (-1 == range(lex_state->buf.a, (unsigned char *) &@m, (unsigned char *) &@n,  2)) {
 			if (errno == ERANGE) {
 				err(lex_state, "hex sequence %s out of range: expected %s0..%s%x inclusive",
 					lex_state->buf.a, prefix(2), prefix(2), UCHAR_MAX);
@@ -475,7 +476,7 @@
 	@};
 
 	OCTRANGE: () -> (m :char, n :char) = @{
-		if (-1 == range(lex_state->buf.a, &@m, &@n,  8)) {
+		if (-1 == range(lex_state->buf.a, (unsigned char *) &@m, (unsigned char *) &@n,  8)) {
 			if (errno == ERANGE) {
 				err(lex_state, "octal sequence %s out of range: expected %s0..%s%o inclusive",
 					lex_state->buf.a, prefix(8), prefix(8), UCHAR_MAX);
@@ -487,7 +488,7 @@
 	@};
 
 	DECRANGE: () -> (m :char, n :char) = @{
-		if (-1 == range(lex_state->buf.a, &@m, &@n, 10)) {
+		if (-1 == range(lex_state->buf.a, (unsigned char *) &@m, (unsigned char *) &@n, 10)) {
 			if (errno == ERANGE) {
 				err(lex_state, "decimal sequence %s out of range: expected %s0..%s%u inclusive",
 					lex_state->buf.a, prefix(10), prefix(10), UCHAR_MAX);
@@ -499,7 +500,7 @@
 	@};
 
 	HEXRANGE: () -> (m :char, n :char) = @{
-		if (-1 == range(lex_state->buf.a, &@m, &@n, 16)) {
+		if (-1 == range(lex_state->buf.a, (unsigned char *) &@m, (unsigned char *) &@n, 16)) {
 			if (errno == ERANGE) {
 				err(lex_state, "hex sequence %s out of range: expected %s0..%s%x inclusive",
 					lex_state->buf.a, prefix(16), prefix(16), UCHAR_MAX);
@@ -523,16 +524,28 @@
 	<rep-one-or-more>: () -> (min :count, max :count) = @{
 		@min = 1;
 		@max = 0;
+
+		/* workaround for SID's ! = f(); */
+		(void) @min;
+		(void) @max;
 	@};
 
 	<rep-zero-or-more>: () -> (min :count, max :count) = @{
 		@min = 0;
 		@max = 0;
+
+		/* workaround for SID's ! = f(); */
+		(void) @min;
+		(void) @max;
 	@};
 
 	<rep-zero-or-one>: () -> (min :count, max :count) = @{
 		@min = 0;
 		@max = 1;
+
+		/* workaround for SID's ! = f(); */
+		(void) @min;
+		(void) @max;
 	@};
 
 	<set-repeat>: (t :ast_term, min :count, max :count) -> () = @{
@@ -563,7 +576,7 @@
 
 
 	<make-empty-term>: () -> (t :ast_term) = @{
-		@t = ast_make_empty_term();
+		@t = ast_make_empty_term(act_state->invisible);
 	@};
 
 	<make-rule-term>: (n :string) -> (t :ast_term) = @{
@@ -581,7 +594,7 @@
 			@!;
 		}
 
-		@t = ast_make_rule_term(r);
+		@t = ast_make_rule_term(act_state->invisible, r);
 	@};
 
 	<make-ci-literal-term>: (x :txt) -> (t :ast_term) = @{
@@ -592,29 +605,39 @@
 			((char *) @x.p)[i] = tolower((unsigned char) @x.p[i]);
 		}
 
-		@t = ast_make_literal_term(&@x, 1);
+		@t = ast_make_literal_term(act_state->invisible, &@x, 1);
 	@};
 
 	<make-cs-literal-term>: (x :txt) -> (t :ast_term) = @{
-		@t = ast_make_literal_term(&@x, 0);
+		@t = ast_make_literal_term(act_state->invisible, &@x, 0);
 	@};
 
 	<make-token-term>: (n :string) -> (t :ast_term) = @{
-		@t = ast_make_token_term(@n);
+		@t = ast_make_token_term(act_state->invisible, @n);
 	@};
 
 	<make-prose-term>: (l :string) -> (t :ast_term) = @{
 		const char *s;
 
-		s = xstrdup(trim(@l));
+		s = xstrdup(trim((char *) @l));
 
-		@t = ast_make_prose_term(s);
+		free((void *) @l);
 
-		free(@l);
+		if (!strcmp(s, "kgt:invisible")) {
+			act_state->invisible = 1;
+
+			@t = ast_make_empty_term(act_state->invisible);
+		} else if (!strcmp(s, "kgt:visible")) {
+			act_state->invisible = 0;
+
+			@t = ast_make_empty_term(act_state->invisible);
+		} else {
+			@t = ast_make_prose_term(act_state->invisible, s);
+		}
 	@};
 
 	<make-group-term>: (a :ast_alt) -> (t :ast_term) = @{
-		@t = ast_make_group_term(@a);
+		@t = ast_make_group_term(act_state->invisible, @a);
 	@};
 
 	<make-range-term>: (m :char, n :char) -> (t :ast_term) = @{
@@ -627,19 +650,19 @@
 			struct ast_alt *new;
 			struct ast_term *t;
 
-			t = ast_make_char_term(i);
-			new = ast_make_alt(t);
+			t = ast_make_char_term(act_state->invisible, i);
+			new = ast_make_alt(act_state->invisible, t);
 
 			new->next = a;
 			a = new;
 		}
 
-		@t = ast_make_group_term(a);
+		@t = ast_make_group_term(act_state->invisible, a);
 	@};
 
 
 	<make-alt>: (t :ast_term) -> (a :ast_alt) = @{
-		@a = ast_make_alt(@t);
+		@a = ast_make_alt(act_state->invisible, @t);
 	@};
 
 	<make-rule>: (n :string, a :ast_alt) -> (r :ast_rule) = @{
@@ -746,6 +769,7 @@
 		(void) ltrim;
 		(void) rtrim;
 		(void) trim;
+		(void) err_unimplemented;
 
 		assert(f != NULL);
 
@@ -778,6 +802,8 @@
 
 		/* This is a workaround for ADVANCE_LEXER assuming a pointer */
 		act_state = &act_state_s;
+
+		act_state->invisible = 0;
 
 		ADVANCE_LEXER;
 		FORM_ENTRY(lex_state, act_state, &g);
@@ -823,7 +849,7 @@
 
 							token = t->u.rule->name;
 
-							ast_free_rule(t->u.rule);
+							ast_free_rule((void *) t->u.rule);
 
 							t->type    = TYPE_TOKEN;
 							t->u.token = token;

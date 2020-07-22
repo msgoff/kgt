@@ -24,6 +24,7 @@ static void
 output_term(const struct ast_term *term)
 {
 	assert(term->type != TYPE_GROUP);
+	assert(!term->invisible);
 	/* TODO: semantic checks ought to find if we can output to this language; groups cannot */
 
 	/* BNF cannot express term repetition; TODO: semantic checks for this */
@@ -58,6 +59,9 @@ output_term(const struct ast_term *term)
 	case TYPE_PROSE:
 		fprintf(stderr, "unimplemented\n");
 		exit(EXIT_FAILURE);
+
+	case TYPE_GROUP:
+		break;
 	}
 }
 
@@ -65,6 +69,8 @@ static void
 output_alt(const struct ast_alt *alt)
 {
 	const struct ast_term *term;
+
+	assert(!alt->invisible);
 
 	for (term = alt->terms; term != NULL; term = term->next) {
 		output_term(term);

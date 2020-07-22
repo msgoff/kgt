@@ -64,7 +64,7 @@ bottom_loop(struct node **np)
 		list_push(&new, n);
 		list_push(&new, NULL);
 
-		*np = node_create_alt(new);
+		*np = node_create_alt(n->invisible, new);
 	}
 
 	return 1;
@@ -90,6 +90,15 @@ rrd_pretty_bottom(int *changed, struct node **n)
 		if (bottom_loop(n)) {
 			*changed = 1;
 		}
+		break;
+
+	case NODE_CI_LITERAL:
+	case NODE_CS_LITERAL:
+	case NODE_RULE:
+	case NODE_PROSE:
+	case NODE_ALT:
+	case NODE_ALT_SKIPPABLE:
+	case NODE_SEQ:
 		break;
 	}
 }

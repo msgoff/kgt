@@ -12,6 +12,7 @@
  */
 
 #define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 
 #include <assert.h>
 #include <limits.h>
@@ -212,12 +213,18 @@ justify(struct render_context *ctx, const struct tnode *n, unsigned space,
 	if (n->type != TNODE_ELLIPSIS) {
 		svg_path_h(&ctx->paths, ctx->x, ctx->y, lhs);
 	}
+	if (debug) {
+		svg_rect(ctx, lhs, 5, "debug justify");
+	}
 	ctx->x += lhs;
 
 	node_walk_render(n, ctx, base);
 
 	if (n->type != TNODE_ELLIPSIS) {
 		svg_path_h(&ctx->paths, ctx->x, ctx->y, rhs);
+	}
+	if (debug) {
+		svg_rect(ctx, rhs, 5, "debug justify");
 	}
 	ctx->x += rhs;
 }
@@ -285,6 +292,18 @@ render_tile(struct render_context *ctx, enum tile tile)
 		assert(!"unreached");
 	}
 
+	if (debug) {
+		char s[16];
+		struct txt t;
+
+		snprintf(s, sizeof s, "%d", tile);
+
+		t.p = s;
+		t.n = strlen(s);
+		svg_textbox(ctx, &t, 10, 0, "debug tile");
+		ctx->x -= 10;
+	}
+
 	svg_path_q(&ctx->paths, ctx->x, ctx->y + dy, rx, ry, 10, y);
 	ctx->x += 10;
 }
@@ -334,6 +353,8 @@ render_tline_inner(struct render_context *ctx, enum tline tline, int rhs)
 	case TLINE_I:
 	case TLINE_i: u[0] = TILE_LINE | TILE_BL_N1; u[1] = TILE_LINE | TILE_BR; break;
 
+	case TLINE_J: u[0] = TILE_LINE;  u[1] = TILE_LINE; break;
+
 	default: u[0] = 0; u[1] = 0; break;
 	}
 
@@ -358,6 +379,7 @@ render_tline_outer(struct render_context *ctx, enum tline tline, int rhs)
 	case TLINE_h: u[0] = TILE_LINE;           u[1] = TILE_LINE; break;
 	case TLINE_I:
 	case TLINE_i: u[0] = TILE_LINE;           u[1] = TILE_LINE; break;
+	case TLINE_J: u[0] = TILE_LINE;           u[1] = TILE_LINE; break;
 
 	default: u[0] = 0; u[1] = 0; break;
 	}
@@ -386,7 +408,14 @@ render_vlist(const struct tnode *n,
 	x = ctx->x;
 	y = ctx->y;
 
-	for (j = 0; j < n->u.vlist.n; j++) {
+
+	/*
+	 * A vlist of 0 items is a special case, meaning to draw
+	 * a horizontal line only.
+	 */
+	if (n->u.vlist.n == 0 && n->w > 0) {
+		svg_path_h(&ctx->paths, ctx->x, ctx->y, n->w * 10);
+	} else for (j = 0; j < n->u.vlist.n; j++) {
 		ctx->x = x;
 
 		render_tline_outer(ctx, n->u.vlist.b[j], 0);
@@ -472,12 +501,11 @@ node_walk_render(const struct tnode *n,
 {
 	assert(ctx != NULL);
 
-	switch (n->type) {
-	case TNODE_SKIP:
-		/* TODO: skips under loop alts are too close to the line */
-		ctx->x += n->w * 10;
-		break;
+	if (debug) {
+		svg_rect(ctx, n->w * 10, 2, "debug node");
+	}
 
+	switch (n->type) {
 	case TNODE_RTL_ARROW:
 		svg_path_h(&ctx->paths, ctx->x, ctx->y, 10);
 		svg_arrow(ctx, ctx->x + n->w * 5, ctx->y, 1);
@@ -517,7 +545,7 @@ node_walk_render(const struct tnode *n,
 		if (n->u.comment.tnode->type == TNODE_VLIST
 		&& n->u.comment.tnode->u.vlist.o == 0
 		&& n->u.comment.tnode->u.vlist.n == 2
-		&& (n->u.comment.tnode->u.vlist.a[1]->type == TNODE_SKIP || n->u.comment.tnode->u.vlist.a[1]->type == TNODE_RTL_ARROW || n->u.comment.tnode->u.vlist.a[1]->type == TNODE_LTR_ARROW)) {
+		&& ((n->u.comment.tnode->u.vlist.a[1]->type == TNODE_VLIST && n->u.comment.tnode->u.vlist.a[1]->u.vlist.n == 0) || n->u.comment.tnode->u.vlist.a[1]->type == TNODE_RTL_ARROW || n->u.comment.tnode->u.vlist.a[1]->type == TNODE_LTR_ARROW)) {
 			offset += 10;
 		}
 
@@ -555,6 +583,7 @@ node_walk_render(const struct tnode *n,
 	}
 
 	case TNODE_VLIST:
+		/* TODO: .n == 0 skips under loop alts are too close to the line */
 		render_vlist(n, ctx, base);
 		break;
 
@@ -638,6 +667,11 @@ svg_render_rule(const struct tnode *node, const char *base,
 			svg_path_move(p, &nx, &ny);
 
 			svg_path_remove(&ctx.paths, p);
+
+			/* consolidate only when not debugging */
+			if (debug) {
+				break;
+			}
 
 			p = svg_path_find_following(ctx.paths, nx, ny);
 		} while (p != NULL);
@@ -829,6 +863,15 @@ svg_output(const struct ast_rule *grammar)
 
 	printf("    rect, line, path { stroke-width: 1.5px; stroke: black; fill: transparent; }\n");
 	printf("    rect, line, path { stroke-linecap: square; stroke-linejoin: rounded; }\n");
+
+	if (debug) {
+		printf("    rect.debug { stroke: none; opacity: 0.75; }\n");
+		printf("    rect.debug.tile { fill: #cccccc; }\n");
+		printf("    rect.debug.node { fill: transparent; stroke-width: 1px; stroke: #ccccff; stroke-dasharray: 2 3; }\n");
+		printf("    rect.debug.justify { fill: #ccccff; }\n");
+		printf("    text.debug.tile { opacity: 0.3; font-family: monospace; font-weight: bold; stroke: none; }\n");
+	}
+
 	printf("    path { fill: transparent; }\n");
 	printf("    text.literal { font-family: monospace; }\n");
 	printf("    line.ellipsis { stroke-dasharray: 1 3.5; }\n");

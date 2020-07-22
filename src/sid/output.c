@@ -46,6 +46,9 @@ output_literal(const struct txt *t)
 static void
 output_basic(const struct ast_term *term)
 {
+	assert(term != NULL);
+	assert(!term->invisible);
+
 	switch (term->type) {
 	case TYPE_EMPTY:
 		fputs("$$; ", stdout);
@@ -81,6 +84,9 @@ output_basic(const struct ast_term *term)
 static void
 output_term(const struct ast_term *term)
 {
+	assert(term != NULL);
+	assert(!term->invisible);
+
 	/* SID cannot express term repetition; TODO: semantic checks for this */
 	/* TODO: can output repetition as [ ... ] local rules with a stub to call them X times? */
 	assert(term->min <= 1);
@@ -101,6 +107,9 @@ static void
 output_alt(const struct ast_alt *alt)
 {
 	const struct ast_term *term;
+
+	assert(alt != NULL);
+	assert(!alt->invisible);
 
 	for (term = alt->terms; term != NULL; term = term->next) {
 		output_term(term);
@@ -135,12 +144,19 @@ is_equal(const struct ast_term *a, const struct ast_term *b)
 	}
 
 	switch (a->type) {
+	case TYPE_EMPTY:      return 1;
 	case TYPE_RULE:       return 0 == strcmp(a->u.rule->name,    b->u.rule->name);
 	case TYPE_CI_LITERAL: return 0 == txtcasecmp(&a->u.literal, &b->u.literal);
 	case TYPE_CS_LITERAL: return 0 == txtcmp(&a->u.literal,     &b->u.literal);
 	case TYPE_TOKEN:      return 0 == strcmp(a->u.token,         b->u.token);
 	case TYPE_PROSE:      return 0 == strcmp(a->u.prose,         b->u.prose);
+
+	case TYPE_GROUP:
+		/* unimplemented */
+		return 0;
 	}
+
+	assert(!"unreached");
 }
 
 static void
@@ -157,7 +173,13 @@ output_terminals(const struct ast_rule *grammar)
 			const struct ast_term *term;
 			struct ast_term *t;
 
+			assert(alt!= NULL);
+			assert(!alt->invisible);
+
 			for (term = alt->terms; term != NULL; term = term->next) {
+				assert(term!= NULL);
+				assert(!term->invisible);
+
 				switch (term->type) {
 				case TYPE_EMPTY:
 				case TYPE_GROUP:
@@ -186,6 +208,7 @@ output_terminals(const struct ast_rule *grammar)
 				t = xmalloc(sizeof *t);
 				t->u.literal = term->u.literal;
 				t->type = term->type;
+				t->invisible = 0;
 				t->next = found;
 				found = t;
 			}

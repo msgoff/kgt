@@ -9,8 +9,9 @@
  */
 
 #include <assert.h>
-#include <string.h>
+#include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -24,7 +25,7 @@
 #include "../rrd/list.h"
 
 static void
-add_alt(struct list **list, const struct txt *t)
+add_alt(int invisible, struct list **list, const struct txt *t)
 {
 	struct node *node;
 	struct txt q;
@@ -35,38 +36,62 @@ add_alt(struct list **list, const struct txt *t)
 
 	q = xtxtdup(t);
 
-	node = node_create_cs_literal(&q);
+	node = node_create_cs_literal(invisible, &q);
 
 	list_push(list, node);
 }
 
 /* TODO: centralise */
 static void
-f(struct list **list, const struct txt *t, char *p, size_t n)
+permute_cases(int invisible, struct list **list, const struct txt *t)
 {
+	size_t i, j;
+	unsigned long num_alphas, perm_count;
+	unsigned long alpha_inds[CHAR_BIT * sizeof i - 1]; /* - 1 because we shift (1 << n) by this size */
+	size_t n;
+	char *p;
+
 	assert(list != NULL);
 	assert(t != NULL);
 	assert(t->p != NULL);
 
-	if (n == 0) {
-		add_alt(list, t);
-		return;
+	p = (void *) t->p;
+	n = t->n;
+
+	num_alphas = 0;
+	for (i = 0; i < n; i++) {
+		if (!isalpha((unsigned char) p[i])) {
+			continue;
+		}
+
+		if (num_alphas + 1 > sizeof alpha_inds / sizeof *alpha_inds) {
+			fprintf(stderr, "Too many alpha characters in case-invensitive string "
+				"\"%.*s\", max is %u\n",
+				(int) t->n, t->p,
+				(unsigned) (sizeof alpha_inds / sizeof *alpha_inds));
+			exit(EXIT_FAILURE);
+		}
+
+
+		alpha_inds[num_alphas++] = i;
 	}
 
-	if (!isalpha((unsigned char) *p)) {
-		f(list, t, p + 1, n - 1);
-		return;
-	}
+	perm_count = (1UL << num_alphas); /* this limits us to sizeof perm_count */
+	for (i = 0; i < perm_count; i++) {
+		for (j = 0; j < num_alphas; j++) {
+			p[alpha_inds[j]] = ((i >> j) & 1UL)
+				? tolower((unsigned char) p[alpha_inds[j]])
+				: toupper((unsigned char) p[alpha_inds[j]]);
+		}
 
-	*p = toupper((unsigned char) *p);
-	f(list, t, p + 1, n - 1);
-	*p = tolower((unsigned char) *p);
-	f(list, t, p + 1, n - 1);
+		add_alt(invisible, list, t);
+	}
 }
 
 static void
 rewrite_ci(struct node *n)
 {
+	struct txt tmp;
 	size_t i;
 
 	assert(n->type == NODE_CI_LITERAL);
@@ -80,13 +105,17 @@ rewrite_ci(struct node *n)
 		assert(islower((unsigned char) n->u.literal.p[i]));
 	}
 
+	assert(n->u.literal.p != NULL);
+	tmp = n->u.literal;
+
 	/* we repurpose the existing node, which breaks abstraction for freeing */
 	n->type = NODE_ALT;
 	n->u.alt = NULL;
 
-	f(&n->u.alt, &n->u.literal, (void *) n->u.literal.p, n->u.literal.n);
+	/* invisibility of new alts is inherited from n->invisible itself */
+	permute_cases(n->invisible, &n->u.alt, &tmp);
 
-	free((void *) n->u.literal.p);
+	free((void *) tmp.p);
 }
 
 static void
@@ -106,6 +135,7 @@ node_walk(struct node *n)
 
 	case NODE_CS_LITERAL:
 	case NODE_RULE:
+	case NODE_PROSE:
 
 		break;
 

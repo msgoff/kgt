@@ -26,7 +26,8 @@ enum tline {
 	TLINE_F,
 	TLINE_G, TLINE_g,
 	TLINE_H, TLINE_h,
-	TLINE_I, TLINE_i
+	TLINE_I, TLINE_i,
+	TLINE_J
 };
 
 /*
@@ -59,7 +60,6 @@ struct tnode_hlist {
 
 struct tnode {
 	enum {
-		TNODE_SKIP,
 		TNODE_RTL_ARROW,
 		TNODE_LTR_ARROW,
 		TNODE_ELLIPSIS,

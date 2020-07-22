@@ -11,6 +11,7 @@
  */
 
 #define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 
 #include <assert.h>
 #include <limits.h>
@@ -223,6 +224,7 @@ render_tline(struct render_context *ctx, enum tline tline, int rhs)
 	case TLINE_G: a = "\001\021"; break; case TLINE_g: a = "\025\032"; break;
 	case TLINE_H: a = "\004\026"; break; case TLINE_h: a = "\020\030"; break;
 	case TLINE_I: a = "\001\021"; break; case TLINE_i: a = "\025\032"; break;
+	case TLINE_J: a = "\022\022"; break;
 
 	default:
 		a = "??";
@@ -255,7 +257,17 @@ render_vlist(const struct tnode *n, struct render_context *ctx)
 		ctx->y -= n->a;
 	}
 
-	for (j = 0; j < n->u.vlist.n; j++) {
+	/*
+	 * A vlist of 0 items is a special case, meaning to draw
+	 * a horizontal line only.
+	 */
+	if (n->u.vlist.n == 0) {
+		size_t i;
+
+		for (i = 0; i < n->w; i++) {
+			bprintf(ctx, "\022");
+		}
+	} else for (j = 0; j < n->u.vlist.n; j++) {
 		ctx->x = x;
 
 		render_tline(ctx, n->u.vlist.b[j], 0);
@@ -349,9 +361,6 @@ node_walk_render(const struct tnode *n, struct render_context *ctx)
 	assert(ctx != NULL);
 
 	switch (n->type) {
-	case TNODE_SKIP:
-		break;
-
 	case TNODE_RTL_ARROW:
 		bprintf(ctx, "%.*s", (int) n->w, "<");
 		break;

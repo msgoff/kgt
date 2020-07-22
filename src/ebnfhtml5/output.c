@@ -88,6 +88,8 @@ atomic(const struct ast_term *term)
 
 		return atomic(term->u.group->terms);
 	}
+
+	assert(!"unreached");
 }
 
 static const char *
@@ -134,6 +136,9 @@ static void
 output_term(const struct ast_term *term)
 {
 	const char *r;
+
+	assert(term != NULL);
+	assert(!term->invisible);
 
 	r = rep(term->min, term->max);
 
@@ -207,6 +212,9 @@ static void
 output_alt(const struct ast_alt *alt)
 {
 	const struct ast_term *term;
+
+	assert(alt != NULL);
+	assert(!alt->invisible);
 
 	for (term = alt->terms; term != NULL; term = term->next) {
 		printf("<span class='alt'>");
